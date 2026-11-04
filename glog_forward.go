@@ -10,6 +10,7 @@
 package glog
 
 import (
+	"context"
 	"sync/atomic"
 
 	"github.com/golang/glog/internal/logsink"
@@ -18,10 +19,15 @@ import (
 // Forwarder receives each formatted log entry, header included, exactly as it
 // is written to stderr. severity is "INFO", "WARNING", "ERROR" or "FATAL".
 //
+// ctx is the context passed to the *Context logging functions (InfoContext,
+// ErrorContextf, ...), and nil for the others. A forwarder can use it to tie
+// the entry to request-scoped data such as a trace. Like logsink.Meta.Context,
+// it is only valid for the duration of the call.
+//
 // It runs synchronously on the goroutine that logged, after the stderr and file
 // sinks have written the entry, so it must be fast and must not call glog. The
 // line buffer is only valid for the duration of the call.
-type Forwarder func(severity string, line []byte)
+type Forwarder func(ctx context.Context, severity string, line []byte)
 
 var forwarder atomic.Pointer[Forwarder]
 
@@ -43,7 +49,7 @@ func (forwardSink) Enabled(*logsink.Meta) bool {
 
 func (forwardSink) Emit(m *logsink.Meta, data []byte) (int, error) {
 	if f := forwarder.Load(); f != nil {
-		(*f)(m.Severity.String(), data)
+		(*f)(m.Context, m.Severity.String(), data)
 	}
 	// Never report an error: a forwarding problem must not terminate the process.
 	return len(data), nil
