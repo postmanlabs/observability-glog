@@ -49,7 +49,10 @@ func (forwardSink) Enabled(*logsink.Meta) bool {
 
 func (forwardSink) Emit(m *logsink.Meta, data []byte) (int, error) {
 	if f := forwarder.Load(); f != nil {
-		(*f)(m.Context, m.Severity.String(), data)
+		func() {
+			defer func() { _ = recover() }()
+			(*f)(m.Context, m.Severity.String(), data)
+		}()
 	}
 	// Never report an error: a forwarding problem must not terminate the process.
 	return len(data), nil
